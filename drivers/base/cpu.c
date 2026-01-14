@@ -19,7 +19,7 @@
 #include <linux/tick.h>
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
-#include <linux/init.h>
+#include <linux/slab.h>
 
 #include "base.h"
 
@@ -700,9 +700,6 @@ void __init cpu_dev_init(void)
 
 /* --- CUSTOM CHIP-ID EMULATION START --- */
 
-/* Khai báo extern để trình biên dịch biết system_kset tồn tại ở nơi khác */
-extern struct kset *system_kset;
-
 static ssize_t m_id_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	return sprintf(buf, "202025\n");
@@ -710,44 +707,37 @@ static ssize_t m_id_show(struct kobject *kobj, struct kobj_attribute *attr, char
 
 static struct kobj_attribute m_id_attr = __ATTR(m_id, 0444, m_id_show, NULL);
 
-static struct attribute *custom_chipid_attrs[] = {
-	&m_id_attr.attr,
-	NULL,
-};
-
-static const struct attribute_group custom_chipid_group = {
-	.attrs = custom_chipid_attrs,
-};
-
 static int __init custom_chipid_init(void)
 {
+	struct kset *s_kset;
 	struct kobject *chipid_kobj;
 	int err;
 
-	/* Kiểm tra system_kset */
-	if (!system_kset) {
-		pr_err("CHIPID_DEBUG: system_kset is NULL\n");
+	/* 1. Tìm kset có tên "system" thay vì dùng biến trực tiếp */
+	s_kset = kset_find("system");
+	if (!s_kset) {
+		pr_err("CHIPID_DEBUG: 'system' kset not found!\n");
 		return -ENODEV;
 	}
 
-	/* Tạo kobject chip-id */
-	chipid_kobj = kobject_create_and_add("chip-id", &system_kset->kobj);
+	/* 2. Tạo kobject 'chip-id' lồng trong system */
+	chipid_kobj = kobject_create_and_add("chip-id", &s_kset->kobj);
 	if (!chipid_kobj) {
-		pr_err("CHIPID_DEBUG: Failed to create kobject\n");
+		pr_err("CHIPID_DEBUG: Failed to create chip-id kobject\n");
 		return -ENOMEM;
 	}
 
-	/* Tạo file m_id */
-	err = sysfs_create_group(chipid_kobj, &custom_chipid_group);
+	/* 3. Tạo file m_id */
+	err = sysfs_create_file(chipid_kobj, &m_id_attr.attr);
 	if (err) {
 		kobject_put(chipid_kobj);
 		return err;
 	}
 
-	pr_info("CHIPID_DEBUG: Node created at /sys/devices/system/chip-id/m_id\n");
+	pr_info("CHIPID_DEBUG: Successfully created /sys/devices/system/chip-id/m_id\n");
 	return 0;
 }
 
-/* Dùng late_initcall để đảm bảo hệ thống đã sẵn sàng */
+/* Sử dụng late_initcall để đảm bảo kset "system" đã được tạo trước đó */
 late_initcall(custom_chipid_init);
 /* --- CUSTOM CHIP-ID EMULATION END --- */
