@@ -19,6 +19,7 @@
 #include <linux/tick.h>
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
+#include <linux/init.h>
 
 #include "base.h"
 
@@ -699,19 +700,16 @@ void __init cpu_dev_init(void)
 
 /* --- CUSTOM CHIP-ID EMULATION START --- */
 
-/**
- * m_id_show - Trả về giá trị m_id khi cat file
- * Sử dụng sprintf để đảm bảo định dạng văn bản chuẩn sysfs
- */
+/* Khai báo extern để trình biên dịch biết system_kset tồn tại ở nơi khác */
+extern struct kset *system_kset;
+
 static ssize_t m_id_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	return sprintf(buf, "202025\n");
 }
 
-/* Định nghĩa thuộc tính m_id với quyền 0444 (Chỉ đọc cho tất cả) */
 static struct kobj_attribute m_id_attr = __ATTR(m_id, 0444, m_id_show, NULL);
 
-/* Nhóm các thuộc tính để Kernel quản lý tập trung */
 static struct attribute *custom_chipid_attrs[] = {
 	&m_id_attr.attr,
 	NULL,
@@ -721,42 +719,35 @@ static const struct attribute_group custom_chipid_group = {
 	.attrs = custom_chipid_attrs,
 };
 
-/**
- * custom_chipid_init - Khởi tạo node chip-id
- * Sử dụng late_initcall để đảm bảo system_kset đã được khởi tạo hoàn toàn
- */
 static int __init custom_chipid_init(void)
 {
 	struct kobject *chipid_kobj;
 	int err;
 
-	/* Kiểm tra sự tồn tại của system_kset để tránh Kernel Panic */
+	/* Kiểm tra system_kset */
 	if (!system_kset) {
-		pr_err("CHIPID_DEBUG: system_kset not found!\n");
+		pr_err("CHIPID_DEBUG: system_kset is NULL\n");
 		return -ENODEV;
 	}
 
-	/* Tạo thư mục 'chip-id' bên trong /sys/devices/system/ */
-	chipid_kobj = kobject_create_and_add("chip-id", system_kset);
+	/* Tạo kobject chip-id */
+	chipid_kobj = kobject_create_and_add("chip-id", &system_kset->kobj);
 	if (!chipid_kobj) {
-		pr_err("CHIPID_DEBUG: Failed to create kobject chip-id\n");
+		pr_err("CHIPID_DEBUG: Failed to create kobject\n");
 		return -ENOMEM;
 	}
 
-	/* Tạo các file (m_id) bên trong thư mục chip-id */
+	/* Tạo file m_id */
 	err = sysfs_create_group(chipid_kobj, &custom_chipid_group);
 	if (err) {
-		pr_err("CHIPID_DEBUG: Failed to create sysfs group\n");
 		kobject_put(chipid_kobj);
 		return err;
 	}
 
-	pr_info("CHIPID_DEBUG: Successfully initialized /sys/devices/system/chip-id/m_id\n");
+	pr_info("CHIPID_DEBUG: Node created at /sys/devices/system/chip-id/m_id\n");
 	return 0;
 }
 
-/* * Sử dụng late_initcall thay vì device_initcall 
- * để chắc chắn system_kset (được tạo ở postcore) đã sẵn sàng.
- */
+/* Dùng late_initcall để đảm bảo hệ thống đã sẵn sàng */
 late_initcall(custom_chipid_init);
 /* --- CUSTOM CHIP-ID EMULATION END --- */
