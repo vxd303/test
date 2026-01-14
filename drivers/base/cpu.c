@@ -690,6 +690,32 @@ static inline void cpu_register_vulnerabilities(void) { }
 #endif
 
 void __init cpu_dev_init(void)
+
+/* Khai báo bên ngoài hàm cpu_dev_init */
+static ssize_t m_id_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "202025\n");
+}
+static struct kobj_attribute m_id_attr = __ATTR(m_id, 0444, m_id_show, NULL);
+
+/* Bên trong hàm cpu_dev_init, sau dòng register cpu_subsys */
+{
+    struct kobject *chipid_kobj;
+    printk(KERN_EMERG "CHIPID_DEBUG: Force starting inside cpu_dev_init\n");
+
+    // Tạo chip-id bằng cách dùng chính system_kset đã được khởi tạo
+    chipid_kobj = kobject_create_and_add("chip-id", system_kset);
+    if (chipid_kobj) {
+        if (sysfs_create_file(chipid_kobj, &m_id_attr.attr)) {
+            printk(KERN_EMERG "CHIPID_DEBUG: Failed to create m_id file\n");
+        } else {
+            printk(KERN_EMERG "CHIPID_DEBUG: SUCCESS! /sys/devices/system/chip-id/m_id created\n");
+        }
+    } else {
+        printk(KERN_EMERG "CHIPID_DEBUG: Failed to create kobject\n");
+    }
+}
+
 {
 	if (subsys_system_register(&cpu_subsys, cpu_root_attr_groups))
 		panic("Failed to register CPU subsystem");
