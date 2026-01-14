@@ -1,7 +1,7 @@
 /*
  * CPU subsystem support
  */
-
+#error "DUNG LAI! TOI DANG SUA FILE NAY!"
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/init.h>
