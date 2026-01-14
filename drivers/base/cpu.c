@@ -1,7 +1,7 @@
 /*
  * CPU subsystem support
  */
-#error "DUNG LAI! TOI DANG SUA FILE NAY!"
+
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -19,7 +19,6 @@
 #include <linux/tick.h>
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
-#include <linux/init.h>
 
 #include "base.h"
 
@@ -690,32 +689,6 @@ static inline void cpu_register_vulnerabilities(void) { }
 #endif
 
 void __init cpu_dev_init(void)
-
-/* Khai báo bên ngoài hàm cpu_dev_init */
-static ssize_t m_id_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-    return sprintf(buf, "202025\n");
-}
-static struct kobj_attribute m_id_attr = __ATTR(m_id, 0444, m_id_show, NULL);
-
-/* Bên trong hàm cpu_dev_init, sau dòng register cpu_subsys */
-{
-    struct kobject *chipid_kobj;
-    printk(KERN_EMERG "CHIPID_DEBUG: Force starting inside cpu_dev_init\n");
-
-    // Tạo chip-id bằng cách dùng chính system_kset đã được khởi tạo
-    chipid_kobj = kobject_create_and_add("chip-id", system_kset);
-    if (chipid_kobj) {
-        if (sysfs_create_file(chipid_kobj, &m_id_attr.attr)) {
-            printk(KERN_EMERG "CHIPID_DEBUG: Failed to create m_id file\n");
-        } else {
-            printk(KERN_EMERG "CHIPID_DEBUG: SUCCESS! /sys/devices/system/chip-id/m_id created\n");
-        }
-    } else {
-        printk(KERN_EMERG "CHIPID_DEBUG: Failed to create kobject\n");
-    }
-}
-
 {
 	if (subsys_system_register(&cpu_subsys, cpu_root_attr_groups))
 		panic("Failed to register CPU subsystem");
@@ -726,16 +699,19 @@ static struct kobj_attribute m_id_attr = __ATTR(m_id, 0444, m_id_show, NULL);
 
 /* --- CUSTOM CHIP-ID EMULATION START --- */
 
-/* Khai báo extern để trình biên dịch biết system_kset tồn tại ở nơi khác */
-extern struct kset *system_kset;
-
+/**
+ * m_id_show - Trả về giá trị m_id khi cat file
+ * Sử dụng sprintf để đảm bảo định dạng văn bản chuẩn sysfs
+ */
 static ssize_t m_id_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	return sprintf(buf, "202025\n");
 }
 
+/* Định nghĩa thuộc tính m_id với quyền 0444 (Chỉ đọc cho tất cả) */
 static struct kobj_attribute m_id_attr = __ATTR(m_id, 0444, m_id_show, NULL);
 
+/* Nhóm các thuộc tính để Kernel quản lý tập trung */
 static struct attribute *custom_chipid_attrs[] = {
 	&m_id_attr.attr,
 	NULL,
@@ -745,36 +721,42 @@ static const struct attribute_group custom_chipid_group = {
 	.attrs = custom_chipid_attrs,
 };
 
+/**
+ * custom_chipid_init - Khởi tạo node chip-id
+ * Sử dụng late_initcall để đảm bảo system_kset đã được khởi tạo hoàn toàn
+ */
 static int __init custom_chipid_init(void)
 {
-	#error "KIEM TRA: CODE DANG DUOC BIEN DICH"
 	struct kobject *chipid_kobj;
 	int err;
 
-	/* Kiểm tra system_kset */
+	/* Kiểm tra sự tồn tại của system_kset để tránh Kernel Panic */
 	if (!system_kset) {
-		pr_err("CHIPID_DEBUG: system_kset is NULL\n");
+		pr_err("CHIPID_DEBUG: system_kset not found!\n");
 		return -ENODEV;
 	}
 
-	/* Tạo kobject chip-id */
-	chipid_kobj = kobject_create_and_add("chip-id", &system_kset->kobj);
+	/* Tạo thư mục 'chip-id' bên trong /sys/devices/system/ */
+	chipid_kobj = kobject_create_and_add("chip-id", system_kset);
 	if (!chipid_kobj) {
-		pr_err("CHIPID_DEBUG: Failed to create kobject\n");
+		pr_err("CHIPID_DEBUG: Failed to create kobject chip-id\n");
 		return -ENOMEM;
 	}
 
-	/* Tạo file m_id */
+	/* Tạo các file (m_id) bên trong thư mục chip-id */
 	err = sysfs_create_group(chipid_kobj, &custom_chipid_group);
 	if (err) {
+		pr_err("CHIPID_DEBUG: Failed to create sysfs group\n");
 		kobject_put(chipid_kobj);
 		return err;
 	}
 
-	pr_info("CHIPID_DEBUG: Node created at /sys/devices/system/chip-id/m_id\n");
+	pr_info("CHIPID_DEBUG: Successfully initialized /sys/devices/system/chip-id/m_id\n");
 	return 0;
 }
 
-/* Dùng late_initcall để đảm bảo hệ thống đã sẵn sàng */
+/* * Sử dụng late_initcall thay vì device_initcall 
+ * để chắc chắn system_kset (được tạo ở postcore) đã sẵn sàng.
+ */
 late_initcall(custom_chipid_init);
 /* --- CUSTOM CHIP-ID EMULATION END --- */
