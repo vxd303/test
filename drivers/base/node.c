@@ -18,8 +18,6 @@
 #include <linux/device.h>
 #include <linux/swap.h>
 #include <linux/slab.h>
-#include <linux/kobject.h>
-#include <linux/sysfs.h>
 
 static struct bus_type node_subsys = {
 	.name = "node",
@@ -718,49 +716,3 @@ static int __init register_node_type(void)
 	return ret;
 }
 postcore_initcall(register_node_type);
-
-/* 1. Định nghĩa giá trị tĩnh, dùng hằng số để tối ưu bộ nhớ */
-static const int m_id_value = 202025;
-
-/* 2. Hàm show cực gọn */
-static ssize_t m_id_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-    return sprintf(buf, "%d\n", m_id_value);
-}
-
-/* 3. Tạo attribute tĩnh */
-static struct kobj_attribute m_id_attr = __ATTR(m_id, 0444, m_id_show, NULL);
-
-/* 4. Nhóm các thuộc tính (để dễ dàng mở rộng thêm các node khác sau này) */
-static struct attribute *chipid_attrs[] = {
-    &m_id_attr.attr,
-    NULL,
-};
-
-static const struct attribute_group chipid_attr_group = {
-    .attrs = chipid_attrs,
-};
-
-/* 5. Khởi tạo một lần duy nhất */
-static int __init custom_chipid_init(void)
-{
-    struct kobject *chipid_kobj;
-    int err;
-
-    // Tạo thư mục chip-id trực tiếp dưới /sys/devices/system/
-    chipid_kobj = kobject_create_and_add("chip-id", system_kset);
-    if (!chipid_kobj)
-        return -ENOMEM;
-
-    // Đăng ký cả nhóm attribute (tối ưu hơn việc tạo từng file lẻ)
-    err = sysfs_create_group(chipid_kobj, &chipid_attr_group);
-    if (err) {
-        kobject_put(chipid_kobj);
-        return err;
-    }
-
-    return 0;
-}
-
-// Chạy ở giai đoạn device_init để đảm bảo không làm chậm quá trình boot core
-device_initcall(custom_chipid_init);
