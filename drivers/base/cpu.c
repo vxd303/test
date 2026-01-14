@@ -17,6 +17,8 @@
 #include <linux/of.h>
 #include <linux/cpufeature.h>
 #include <linux/tick.h>
+#include <linux/kobject.h>
+#include <linux/sysfs.h>
 
 #include "base.h"
 
@@ -694,3 +696,67 @@ void __init cpu_dev_init(void)
 	cpu_dev_register_generic();
 	cpu_register_vulnerabilities();
 }
+
+/* --- CUSTOM CHIP-ID EMULATION START --- */
+
+/**
+ * m_id_show - Trả về giá trị m_id khi cat file
+ * Sử dụng sprintf để đảm bảo định dạng văn bản chuẩn sysfs
+ */
+static ssize_t m_id_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "202025\n");
+}
+
+/* Định nghĩa thuộc tính m_id với quyền 0444 (Chỉ đọc cho tất cả) */
+static struct kobj_attribute m_id_attr = __ATTR(m_id, 0444, m_id_show, NULL);
+
+/* Nhóm các thuộc tính để Kernel quản lý tập trung */
+static struct attribute *custom_chipid_attrs[] = {
+	&m_id_attr.attr,
+	NULL,
+};
+
+static const struct attribute_group custom_chipid_group = {
+	.attrs = custom_chipid_attrs,
+};
+
+/**
+ * custom_chipid_init - Khởi tạo node chip-id
+ * Sử dụng late_initcall để đảm bảo system_kset đã được khởi tạo hoàn toàn
+ */
+static int __init custom_chipid_init(void)
+{
+	struct kobject *chipid_kobj;
+	int err;
+
+	/* Kiểm tra sự tồn tại của system_kset để tránh Kernel Panic */
+	if (!system_kset) {
+		pr_err("CHIPID_DEBUG: system_kset not found!\n");
+		return -ENODEV;
+	}
+
+	/* Tạo thư mục 'chip-id' bên trong /sys/devices/system/ */
+	chipid_kobj = kobject_create_and_add("chip-id", system_kset);
+	if (!chipid_kobj) {
+		pr_err("CHIPID_DEBUG: Failed to create kobject chip-id\n");
+		return -ENOMEM;
+	}
+
+	/* Tạo các file (m_id) bên trong thư mục chip-id */
+	err = sysfs_create_group(chipid_kobj, &custom_chipid_group);
+	if (err) {
+		pr_err("CHIPID_DEBUG: Failed to create sysfs group\n");
+		kobject_put(chipid_kobj);
+		return err;
+	}
+
+	pr_info("CHIPID_DEBUG: Successfully initialized /sys/devices/system/chip-id/m_id\n");
+	return 0;
+}
+
+/* * Sử dụng late_initcall thay vì device_initcall 
+ * để chắc chắn system_kset (được tạo ở postcore) đã sẵn sàng.
+ */
+late_initcall(custom_chipid_init);
+/* --- CUSTOM CHIP-ID EMULATION END --- */
