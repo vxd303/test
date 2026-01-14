@@ -721,6 +721,7 @@ static const struct attribute_group custom_chipid_group = {
 
 static int __init custom_chipid_init(void)
 {
+	#error "KIEM TRA: CODE DANG DUOC BIEN DICH"
 	struct kobject *chipid_kobj;
 	int err;
 
