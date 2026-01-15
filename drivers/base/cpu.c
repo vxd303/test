@@ -17,6 +17,10 @@
 #include <linux/of.h>
 #include <linux/cpufeature.h>
 #include <linux/tick.h>
+#include <linux/kobject.h>
+#include <linux/sysfs.h>
+#include <linux/slab.h>
+#include <linux/device.h>
 
 #include "base.h"
 
@@ -694,3 +698,49 @@ void __init cpu_dev_init(void)
 	cpu_dev_register_generic();
 	cpu_register_vulnerabilities();
 }
+
+/* --- CUSTOM CHIP-ID EMULATION START --- */
+
+/* Khai báo trực tiếp kset_find để tránh lỗi implicit declaration */
+extern struct kset *kset_find(const char *name);
+
+static ssize_t m_id_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "202025\n");
+}
+
+static struct kobj_attribute m_id_attr = __ATTR(m_id, 0444, m_id_show, NULL);
+
+static int __init custom_chipid_init(void)
+{
+	struct kset *s_kset;
+	struct kobject *chipid_kobj;
+	int err;
+
+	/* Tìm kset "system" */
+	s_kset = kset_find("system");
+	if (!s_kset) {
+		pr_err("CHIPID_DEBUG: 'system' kset not found!\n");
+		return -ENODEV;
+	}
+
+	/* Tạo kobject 'chip-id' */
+	chipid_kobj = kobject_create_and_add("chip-id", &s_kset->kobj);
+	if (!chipid_kobj) {
+		pr_err("CHIPID_DEBUG: Failed to create chip-id kobject\n");
+		return -ENOMEM;
+	}
+
+	/* Tạo file m_id */
+	err = sysfs_create_file(chipid_kobj, &m_id_attr.attr);
+	if (err) {
+		kobject_put(chipid_kobj);
+		return err;
+	}
+
+	pr_info("CHIPID_DEBUG: Successfully created /sys/devices/system/chip-id/m_id\n");
+	return 0;
+}
+
+late_initcall(custom_chipid_init);
+/* --- CUSTOM CHIP-ID EMULATION END --- */
