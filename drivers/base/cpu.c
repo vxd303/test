@@ -732,5 +732,5 @@ static int __init custom_chipid_init(void)
 	return 0;
 }
 
-late_initcall(custom_chipid_init);
+subsys_initcall(custom_chipid_init);
 
