@@ -18,12 +18,13 @@ static int __init chipid_init(void)
 {
 	int ret;
 
-	if (!system_kobj) {
-		pr_err("CHIPID: system_kobj NULL\n");
+	if (!kernel_kobj) {
+		pr_err("CHIPID: kernel_kobj NULL\n");
 		return -ENODEV;
 	}
 
-	chipid_kobj = kobject_create_and_add("chip-id", system_kobj);
+	/* /sys/kernel/chip-id */
+	chipid_kobj = kobject_create_and_add("chip-id", kernel_kobj);
 	if (!chipid_kobj)
 		return -ENOMEM;
 
@@ -33,7 +34,7 @@ static int __init chipid_init(void)
 		return ret;
 	}
 
-	pr_info("CHIPID: /sys/devices/system/chip-id/m_id created\n");
+	pr_info("CHIPID: created /sys/kernel/chip-id/m_id\n");
 	return 0;
 }
 
