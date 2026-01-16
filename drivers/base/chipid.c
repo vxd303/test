@@ -4,6 +4,7 @@
 #include <linux/printk.h>
 
 static struct kobject *chipid_kobj;
+static char force_size_change[16384];
 
 static ssize_t m_id_show(struct kobject *kobj,
                          struct kobj_attribute *attr, char *buf)
