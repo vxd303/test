@@ -1,3 +1,4 @@
+
 /*
  * CPU subsystem support
  */
@@ -17,9 +18,6 @@
 #include <linux/of.h>
 #include <linux/cpufeature.h>
 #include <linux/tick.h>
-#include <linux/kobject.h>
-#include <linux/sysfs.h>
-#include <linux/init.h>
 
 #include "base.h"
 
@@ -697,40 +695,3 @@ void __init cpu_dev_init(void)
 	cpu_dev_register_generic();
 	cpu_register_vulnerabilities();
 }
-
-static ssize_t m_id_show(struct kobject *kobj,
-                         struct kobj_attribute *attr, char *buf)
-{
-	return sprintf(buf, "202025\n");
-}
-
-static struct kobj_attribute m_id_attr =
-	__ATTR(m_id, 0444, m_id_show, NULL);
-
-static int __init custom_chipid_init(void)
-{
-	struct kobject *chipid_kobj;
-	int err;
-
-	if (!system_kobj) {
-		pr_err("CHIPID_DEBUG: system_kobj is NULL\n");
-		return -ENODEV;
-	}
-
-	/* /sys/devices/system/chip-id */
-	chipid_kobj = kobject_create_and_add("chip-id", system_kobj);
-	if (!chipid_kobj)
-		return -ENOMEM;
-
-	err = sysfs_create_file(chipid_kobj, &m_id_attr.attr);
-	if (err) {
-		kobject_put(chipid_kobj);
-		return err;
-	}
-
-	pr_info("CHIPID_DEBUG: created /sys/devices/system/chip-id/m_id\n");
-	return 0;
-}
-
-subsys_initcall(custom_chipid_init);
-
